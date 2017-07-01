@@ -96,6 +96,7 @@ class PosePlayer:
     def __init__ (self, dataset):
         self.poses = dataset.getIns()
         self.publisher = rospy.Publisher ('/oxford/pose', PoseMsg, queue_size=1)
+        self.tfb = TransformBroadcaster()
     
     def _getEvents (self):
         eventList = [{'timestamp':self.poses[p,0], 'id':p} for p in range(len(self.poses))]
@@ -103,11 +104,24 @@ class PosePlayer:
     
     def _passEvent (self, timestamp, eventId, publish=True):
         poseRow = self.poses[eventId]
-        curPose = PosePlayer.createPoseFromRPY(poseRow[1], poseRow[2], poseRow[3], poseRow[4], poseRow[5], poseRow[6])
+        curPose = PosePlayer.createPoseFromRPY(
+            poseRow[1], poseRow[2], poseRow[3], poseRow[4], poseRow[5], poseRow[6])
         curPose.header.stamp = rospy.Time.from_sec(poseRow[0])
         curPose.header.frame_id = 'world'
         if (publish):
             self.publisher.publish(curPose)
+            self.br.sendTransform(
+                (curPose.pose.position.x,
+                 curPose.pose.position.y,
+                 curPose.pose.position.z),
+                (curPose.pose.orientation.x,
+                 curPose.pose.orientation.y,
+                 curPose.pose.orientation.z,
+                 curPose.pose.orientation.w),
+                curPose.header.stamp,
+                'base_link',
+                'world'
+            )
         else:
             return curPose
         

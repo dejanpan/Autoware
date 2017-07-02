@@ -110,7 +110,7 @@ class PosePlayer:
         curPose.header.frame_id = 'world'
         if (publish):
             self.publisher.publish(curPose)
-            self.br.sendTransform(
+            self.tfb.sendTransform(
                 (curPose.pose.position.x,
                  curPose.pose.position.y,
                  curPose.pose.position.z),

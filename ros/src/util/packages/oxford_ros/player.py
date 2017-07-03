@@ -11,6 +11,7 @@ from tf import transformations
 from tf import TransformBroadcaster
 import numpy as np
 from sdk.nonblocking import NonblockingKeybInput
+from sdk.FileCollector import FileCollector
 
 from geometry_msgs.msg import PoseStamped as PoseMsg
 from sensor_msgs.msg import Image as ImageMsg
@@ -38,6 +39,10 @@ class ImagePlayer:
         self.distortion_coefs = np.array(conf['distortion_coefficients']['data'])
 #         self.calibrator = cv2.cv.Load(path+'/calibration_files/bb_xb3_center.yaml')
         self.cvbridge = cv_bridge.CvBridge()
+        
+#        File Collector
+#         fileList = [pr['center'] for pr in self.imageList]
+#         self.collector = FileCollector(fileList, self.readFileFunc)
 
     def _getEvents (self):
         eventList = [ {'timestamp':self.imageList[i]['timestamp'], 'id':i} for i in range(len(self.imageList)) ]
@@ -45,18 +50,29 @@ class ImagePlayer:
     
     def _passEvent (self, timestamp, eventId, publish=True):
         imageTarget = self.imageList[eventId]
+        
+#         image_ctr = self.collector.pick()
         image_ctr = cv2.imread(imageTarget['center'], cv2.IMREAD_ANYCOLOR)
-        image_ctr = cv2.cvtColor(image_ctr, cv2.COLOR_BAYER_GR2BGR)
-        # Using camera matrix
-        image_ctr = cv2.undistort(image_ctr, self.camera_matrix, self.distortion_coefs)
-        # Using LUT
-#         image_ctr = self.cameraModel.undistort (image_ctr)
+        image_ctr = self.imagePostProcessing(image_ctr)
+        
         msg = self.cvbridge.cv2_to_imgmsg(image_ctr, 'bgr8')
         msg.header.stamp = rospy.Time.from_sec (imageTarget['timestamp'])
         if (publish):
             self.publisher.publish(msg)
         else:
             return msg
+        
+    def imagePostProcessing (self, imageMat):
+        imageMat = cv2.cvtColor(imageMat, cv2.COLOR_BAYER_GR2BGR)
+        # Using camera matrix
+        imageMat = cv2.undistort(imageMat, self.camera_matrix, self.distortion_coefs)
+        # Using LUT
+#         image_ctr = self.cameraModel.undistort (image_ctr)
+        return imageMat
+    
+    def readFileFunc (self, path):
+        image = cv2.imread(path, cv2.IMREAD_ANYCOLOR)
+        return self.imagePostProcessing(image)
 
 
 class LidarPlayer:
@@ -89,6 +105,10 @@ class LidarPlayer:
             self.publisher.publish(msg)
         else:
             return msg
+        
+    def readFileFunc (self, path):
+        scan = np.fromfile(path, np.double)
+        return scan.reshape ((len(scan) // 3,3))
         
 
 
@@ -150,6 +170,8 @@ class Player:
         self.startTime = start
         
     def add_data_player (self, _dataPlayer):
+        if (_dataPlayer is None):
+            return
         self.players.append(_dataPlayer)
     
     def run (self):
@@ -214,9 +236,9 @@ if __name__ == '__main__' :
     player = Player (args.dir, rate=args.rate, start=args.start)
     poses = PosePlayer (player.dataset)
     images = ImagePlayer(player.dataset)
-    lidar3d = LidarPlayer (player.dataset)
+#     lidar3d = LidarPlayer (player.dataset)
     player.add_data_player(poses)
     player.add_data_player(images)
-    player.add_data_player(lidar3d)
+#     player.add_data_player(lidar3d)
     player.run()
 

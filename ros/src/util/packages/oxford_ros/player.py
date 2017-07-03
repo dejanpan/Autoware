@@ -10,6 +10,7 @@ import rospkg
 from tf import transformations
 from tf import TransformBroadcaster
 import numpy as np
+from sdk.nonblocking import NonblockingKeybInput
 
 from geometry_msgs.msg import PoseStamped as PoseMsg
 from sensor_msgs.msg import Image as ImageMsg
@@ -140,18 +141,20 @@ class PosePlayer:
 
 
 class Player:
-    def __init__ (self, datadir, rate=1.0):
+    def __init__ (self, datadir, rate=1.0, start=0.0):
         self.rate = float(rate)
         self.eventList = []
         self.dataset = sdk.Dataset(datadir)
         self.players = []
         self.clockPub = rospy.Publisher ('/clock', Clock, queue_size=1)
+        self.startTime = start
         
     def add_data_player (self, _dataPlayer):
         self.players.append(_dataPlayer)
     
     def run (self):
         self.initRun()
+        isPause = NonblockingKeybInput()
         try:
             for i in range(len(self.eventList)):
                 curEvent = self.eventList[i]
@@ -164,9 +167,11 @@ class Player:
                     time.sleep(delay)
                 if (rospy.is_shutdown()):
                     break
+                if isPause.spacePressed():
+                    isPause.readUntilSpace()
         except KeyboardInterrupt:
             print ("Interrupted")
-            return
+        isPause.setBlock()
         
     def publishClock (self, t):
         ct = Clock()
@@ -182,6 +187,17 @@ class Player:
                 e = {'timestamp': evt['timestamp'], 'id':evt['id'], 'object':player}
                 self.eventList.append(e)
         self.eventList.sort(key=lambda e: e['timestamp'])
+        if self.startTime == 0.0:
+            return
+        validEvents = []
+        start=self.eventList[0]['timestamp']
+        for evt in self.eventList:
+            if evt['timestamp'] < start + self.startTime:
+                continue
+            else:
+                validEvents.append(evt)
+        self.eventList = validEvents
+        
         
         
 if __name__ == '__main__' :
@@ -191,10 +207,11 @@ if __name__ == '__main__' :
     argsp = argparse.ArgumentParser('Oxford ROS Player')
     argsp.add_argument('--dir', type=str, default=None, help='Directory of Oxford dataset')
     argsp.add_argument('--rate', type=float, default=1.0, help='Speed up/Slow down by rate factor')
+    argsp.add_argument('--start', type=float, default=0.0, help='Start SEC seconds into dataset')
     args = argsp.parse_args()
     
     rospy.init_node('oxford_player', anonymous=True)
-    player = Player (args.dir, args.rate)
+    player = Player (args.dir, rate=args.rate, start=args.start)
     poses = PosePlayer (player.dataset)
     images = ImagePlayer(player.dataset)
     lidar3d = LidarPlayer (player.dataset)

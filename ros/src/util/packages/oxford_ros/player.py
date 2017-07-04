@@ -12,6 +12,7 @@ from tf import TransformBroadcaster
 import numpy as np
 from sdk.nonblocking import NonblockingKeybInput
 from sdk.FileCollector import FileCollector
+from sdk.TimerProcess import TimerProcess
 
 from geometry_msgs.msg import PoseStamped as PoseMsg
 from sensor_msgs.msg import Image as ImageMsg
@@ -172,7 +173,7 @@ class PosePlayer:
                  curPose.pose.orientation.z,
                  curPose.pose.orientation.w),
                 curPose.header.stamp,
-                'base_link',
+                'ins',
                 'world'
             )
         else:
@@ -192,13 +193,12 @@ class PosePlayer:
         return p
 
 
-class Player:
+class PlayerControl:
     def __init__ (self, datadir, rate=1.0, start=0.0):
         self.rate = float(rate)
         self.eventList = []
         self.dataset = sdk.Dataset(datadir)
         self.players = []
-        self.clockPub = rospy.Publisher ('/clock', Clock, queue_size=1)
         self.startTime = start
         
     def add_data_player (self, _dataPlayer):
@@ -220,14 +220,15 @@ class Player:
                     latency = t2x - t1x
                     t2 = self.eventList[i+1]['timestamp']
                     delay = (t2 - t1) / self.rate
-                    self.publishClock(curEvent['timestamp'])
                     if (delay > latency):
                         delay -= latency
                         time.sleep(delay)
                 if (rospy.is_shutdown()):
                     break
                 if isPause.spacePressed():
+                    self.timer.pause()
                     isPause.readUntilSpace()
+                    self.timer.resume()
         except KeyboardInterrupt:
             print ("Interrupted")
             
@@ -235,12 +236,8 @@ class Player:
         isPause.setBlock()
         for p in self.players:
             p.close()
+        self.timer.close()
         
-    def publishClock (self, t):
-        ct = Clock()
-        ct.clock = rospy.Time.from_sec(t)
-        self.clockPub.publish(ct)
-    
     def initRun (self):
         for player in self.players:
             eventsInThis = player._getEvents ()
@@ -270,6 +267,8 @@ class Player:
         for player in self.players:
             player.initializeRun()
         
+        self.timer = TimerProcess (self.eventList[0]['timestamp'], self.rate)
+        
         
 if __name__ == '__main__' :
     import sys
@@ -279,10 +278,10 @@ if __name__ == '__main__' :
     argsp.add_argument('--dir', type=str, default=None, help='Directory of Oxford dataset')
     argsp.add_argument('--rate', type=float, default=1.0, help='Speed up/Slow down by rate factor')
     argsp.add_argument('--start', type=float, default=0.0, help='Start SEC seconds into dataset')
-    args = argsp.parse_args()
+    args, unknown_args = argsp.parse_known_args()
     
     rospy.init_node('oxford_player', anonymous=True)
-    player = Player (args.dir, rate=args.rate, start=args.start)
+    player = PlayerControl (args.dir, rate=args.rate, start=args.start)
     poses = PosePlayer (player.dataset)
     images = ImagePlayer(player.dataset)
     lidar3d = LidarPlayer (player.dataset)

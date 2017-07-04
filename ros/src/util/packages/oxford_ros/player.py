@@ -122,9 +122,9 @@ class LidarPlayer:
             stamp=rospy.Time.from_sec(timestamp), 
             frame_id='ldmrs')
         fields = [
-            PointField(name='x', offset=0, datatype=PointField.FLOAT64, count=1),
-            PointField(name='y', offset=8, datatype=PointField.FLOAT64, count=1),
-            PointField(name='z', offset=16, datatype=PointField.FLOAT64, count=1)
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=16, datatype=PointField.FLOAT32, count=1)
         ]
         msg = pcl2.create_cloud(header, fields, scan)
         if (publish):
@@ -134,7 +134,7 @@ class LidarPlayer:
         
     def readFileFunc (self, path):
         scan = np.fromfile(path, np.double)
-        return scan.reshape ((len(scan) // 3,3))
+        return scan.reshape ((len(scan) // 3,3)).astype(np.float32)
         
 
 
@@ -160,7 +160,7 @@ class PosePlayer:
         poseRow = self.poses[eventId]
         curPose = PosePlayer.createPoseFromRPY(
             poseRow[1], poseRow[2], poseRow[3], poseRow[4], poseRow[5], poseRow[6])
-        curPose.header.stamp = rospy.Time.from_sec(poseRow[0])
+        curPose.header.stamp = rospy.Time.from_sec(timestamp)
         curPose.header.frame_id = 'world'
         if (publish):
             self.publisher.publish(curPose)
@@ -172,7 +172,7 @@ class PosePlayer:
                  curPose.pose.orientation.y,
                  curPose.pose.orientation.z,
                  curPose.pose.orientation.w),
-                curPose.header.stamp,
+                rospy.Time.from_sec(timestamp),
                 'ins',
                 'world'
             )
@@ -209,36 +209,31 @@ class PlayerControl:
     def run (self):
         self.initRun()
         isPause = NonblockingKeybInput()
-        try:
-            for i in range(len(self.eventList)):
-                curEvent = self.eventList[i]
-                t1x = time.time()
-                t1 = curEvent['timestamp']
-                curEvent['object']._passEvent (curEvent['timestamp'], curEvent['id'])
-                if i<len(self.eventList)-1 :
-                    t2x = time.time()
-                    latency = t2x - t1x
-                    t2 = self.eventList[i+1]['timestamp']
-                    delay = (t2 - t1) / self.rate
-                    if (delay > latency):
-                        delay -= latency
-                        time.sleep(delay)
-                if (rospy.is_shutdown()):
-                    break
-                if isPause.spacePressed():
-                    self.timer.pause()
-                    isPause.readUntilSpace()
-                    self.timer.resume()
-        except KeyboardInterrupt:
-            print ("Interrupted")
+        
+        while (True):
+            # Wait for a timer event
+            self.timer.eventNotification.wait()
+            self.timer.eventNotification.clear()
+            curEvent = self.eventList[self.timer.currentEventTimerId]
+#             ct = curEvent['timestamp']
+            ct = self.timer.currentTimestamp
+            curEvent['object']._passEvent (ct, curEvent['id'])
             
-        # Cleaning up
+            if (rospy.is_shutdown()):
+                break
+            if isPause.spacePressed():
+                self.timer.pause()
+                isPause.readUntilSpace()
+                self.timer.resume()
+        
         isPause.setBlock()
         for p in self.players:
             p.close()
         self.timer.close()
         
     def initRun (self):
+        
+        # Build list of events
         for player in self.players:
             eventsInThis = player._getEvents ()
             if len(eventsInThis)==0:
@@ -264,10 +259,15 @@ class PlayerControl:
             
             self.eventList = validEvents
 
+        # Tell data players to initialize
         for player in self.players:
             player.initializeRun()
         
-        self.timer = TimerProcess (self.eventList[0]['timestamp'], self.rate)
+        # Tell timer to initialize. Put a delay 1.s 
+        self.timer = TimerProcess (
+            [self.eventList[i]['timestamp'] for i in range(len(self.eventList))], 
+            self.eventList[0]['timestamp']-1.0, 
+            self.rate)
         
         
 if __name__ == '__main__' :

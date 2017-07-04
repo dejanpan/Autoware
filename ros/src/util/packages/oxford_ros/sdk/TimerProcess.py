@@ -8,7 +8,11 @@ from rosgraph_msgs.msg import Clock
 
 class TimerProcess :
     
-    def __init__ (self, _startTimestamp=0, _rate=1.0, hz=100.0):
+    def __init__ (self, _eventList, _startTimestamp=0, _rate=1.0, hz=100.0):
+        
+        # EventList is a list of timestamps
+        self.eventList = _eventList
+        
         if (_startTimestamp==0):
             self.startTimestamp = time.time()
         else:
@@ -21,6 +25,9 @@ class TimerProcess :
         self._isStop = mp.Event()
         self._isStop.clear()
         self.clockPub = rospy.Publisher ('/clock', Clock, queue_size=1)
+        self.currentEventTimerId = None
+        self.eventNotification = mp.Event()
+        self.currentTimestamp = self.startTimestamp
         
         # Last
         self.proc = mp.Process(target=self._process)
@@ -39,8 +46,8 @@ class TimerProcess :
     
     def _process (self):
         i = 0
-        curTime = self.startTimestamp
-        print ("Init time 0")
+        self.currentTimestamp = self.startTimestamp
+        self.currentEventTimerId = 0
         
         while (True):
             if (self._isStop.isSet()):
@@ -48,11 +55,15 @@ class TimerProcess :
             
             # Publish current clock
             ck = Clock()
-            ck.clock = rospy.Time.from_sec(curTime)
+            ck.clock = rospy.Time.from_sec(self.currentTimestamp)
             self.clockPub.publish(ck)
             
             time.sleep(self.delay)
             
             if (not self._isPause.isSet()):
-                curTime += self.timeIncrement
+                self.currentTimestamp += self.timeIncrement
+                
+            if (self.currentTimestamp >= self.eventList[self.currentEventTimerId]) :
+                self.eventNotification.set()
+                self.currentEventTimerId += 1
             

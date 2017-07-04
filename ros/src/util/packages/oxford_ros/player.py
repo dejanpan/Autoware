@@ -26,6 +26,7 @@ import std_msgs
 
 class ImagePlayer:
     def __init__ (self, dataset):
+        self.firstValidId = -1
         self.publisher = rospy.Publisher ('/oxford/image', ImageMsg, queue_size=1)
         self.imageList = dataset.getStereo()
         pkgpack = rospkg.RosPack()
@@ -41,19 +42,26 @@ class ImagePlayer:
         self.cvbridge = cv_bridge.CvBridge()
         
 #        File Collector
-#         fileList = [pr['center'] for pr in self.imageList]
-#         self.collector = FileCollector(fileList, self.readFileFunc)
+        fileList = [pr['center'] for pr in self.imageList]
+        self.collector = FileCollector(fileList, self.readFileFunc)
+        
+    def close (self):
+        print ("Closing images")
+        self.collector.close()
 
     def _getEvents (self):
-        eventList = [ {'timestamp':self.imageList[i]['timestamp'], 'id':i} for i in range(len(self.imageList)) ]
+        eventList = [ 
+            {'timestamp':self.imageList[i]['timestamp'], 'id':i} 
+                for i in range(len(self.imageList)) 
+        ]
         return eventList
     
     def _passEvent (self, timestamp, eventId, publish=True):
         imageTarget = self.imageList[eventId]
         
-#         image_ctr = self.collector.pick()
-        image_ctr = cv2.imread(imageTarget['center'], cv2.IMREAD_ANYCOLOR)
-        image_ctr = self.imagePostProcessing(image_ctr)
+        image_ctr = self.collector.pick()
+#         image_ctr = cv2.imread(imageTarget['center'], cv2.IMREAD_ANYCOLOR)
+#         image_ctr = self.imagePostProcessing(image_ctr)
         
         msg = self.cvbridge.cv2_to_imgmsg(image_ctr, 'bgr8')
         msg.header.stamp = rospy.Time.from_sec (imageTarget['timestamp'])
@@ -77,6 +85,7 @@ class ImagePlayer:
 
 class LidarPlayer:
     def __init__ (self, dataset):
+        self.firstValidId = -1
         self.lidarFileSet = dataset.getMainLidar()
         self.publisher = rospy.Publisher ('/oxford/ldmrs', PointCloud2, queue_size=10)
         pass
@@ -115,9 +124,13 @@ class LidarPlayer:
 
 class PosePlayer:
     def __init__ (self, dataset):
+        self.firstValidId = -1
         self.poses = dataset.getIns()
         self.publisher = rospy.Publisher ('/oxford/pose', PoseMsg, queue_size=1)
         self.tfb = TransformBroadcaster()
+        
+    def close(self):
+        pass
     
     def _getEvents (self):
         eventList = [{'timestamp':self.poses[p,0], 'id':p} for p in range(len(self.poses))]
@@ -180,20 +193,29 @@ class Player:
         try:
             for i in range(len(self.eventList)):
                 curEvent = self.eventList[i]
+                t1x = time.time()
                 t1 = curEvent['timestamp']
                 curEvent['object']._passEvent (curEvent['timestamp'], curEvent['id'])
                 if i<len(self.eventList)-1 :
+                    t2x = time.time()
+                    latency = t2x - t1x
                     t2 = self.eventList[i+1]['timestamp']
                     delay = (t2 - t1) / self.rate
                     self.publishClock(curEvent['timestamp'])
-                    time.sleep(delay)
+                    if (delay > latency):
+                        delay -= latency
+                        time.sleep(delay)
                 if (rospy.is_shutdown()):
                     break
                 if isPause.spacePressed():
                     isPause.readUntilSpace()
         except KeyboardInterrupt:
             print ("Interrupted")
+            
+        # Cleaning up
         isPause.setBlock()
+        for p in self.players:
+            p.close()
         
     def publishClock (self, t):
         ct = Clock()
@@ -210,15 +232,23 @@ class Player:
                 self.eventList.append(e)
         self.eventList.sort(key=lambda e: e['timestamp'])
         if self.startTime == 0.0:
-            return
-        validEvents = []
-        start=self.eventList[0]['timestamp']
-        for evt in self.eventList:
-            if evt['timestamp'] < start + self.startTime:
-                continue
-            else:
-                validEvents.append(evt)
-        self.eventList = validEvents
+            for player in self.players:
+                player.firstValidId = 0
+
+        else:    
+            validEvents = []
+            start=self.eventList[0]['timestamp']
+            for evt in self.eventList:
+                if evt['timestamp'] < start + self.startTime:
+                    continue
+                else:
+                    if evt['object'].firstValidId == -1:
+                        evt['object'].firstValidId = evt['id']
+                    validEvents.append(evt)
+            
+            # Find first ID        
+            
+            self.eventList = validEvents
         
         
         

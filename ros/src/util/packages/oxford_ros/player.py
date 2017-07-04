@@ -41,8 +41,13 @@ class ImagePlayer:
 #         self.calibrator = cv2.cv.Load(path+'/calibration_files/bb_xb3_center.yaml')
         self.cvbridge = cv_bridge.CvBridge()
         
+    def initializeRun (self):
 #        File Collector
-        fileList = [pr['center'] for pr in self.imageList]
+        fileList = [
+            self.imageList[pr]['center'] 
+            for pr in range(len(self.imageList)) 
+                if pr>=self.firstValidId
+        ]
         self.collector = FileCollector(fileList, self.readFileFunc)
         
     def close (self):
@@ -57,14 +62,12 @@ class ImagePlayer:
         return eventList
     
     def _passEvent (self, timestamp, eventId, publish=True):
-        imageTarget = self.imageList[eventId]
-        
         image_ctr = self.collector.pick()
 #         image_ctr = cv2.imread(imageTarget['center'], cv2.IMREAD_ANYCOLOR)
 #         image_ctr = self.imagePostProcessing(image_ctr)
         
         msg = self.cvbridge.cv2_to_imgmsg(image_ctr, 'bgr8')
-        msg.header.stamp = rospy.Time.from_sec (imageTarget['timestamp'])
+        msg.header.stamp = rospy.Time.from_sec (timestamp)
         if (publish):
             self.publisher.publish(msg)
         else:
@@ -90,6 +93,18 @@ class LidarPlayer:
         self.publisher = rospy.Publisher ('/oxford/ldmrs', PointCloud2, queue_size=10)
         pass
     
+    def close (self):
+        print ("Closing LIDAR set")
+        self.collector.close()
+    
+    def initializeRun (self):
+        lidarFileList = [
+            self.lidarFileSet[p]['path']
+            for p in range(len(self.lidarFileSet))
+                if p >= self.firstValidId
+        ]
+        self.collector = FileCollector(lidarFileList, self.readFileFunc)
+    
     def _getEvents (self):
         eventList = [ {
             'timestamp': self.lidarFileSet[i]['timestamp'],
@@ -98,9 +113,10 @@ class LidarPlayer:
         return eventList
     
     def _passEvent (self, timestamp, eventId, publish=True):
-        lidarFile = self.lidarFileSet[eventId]
-        scan = np.fromfile(lidarFile['path'], np.double)
-        scan = scan.reshape((len(scan) // 3, 3))        
+        scan = self.collector.pick()
+#         lidarFile = self.lidarFileSet[eventId]
+#         scan = np.fromfile(lidarFile['path'], np.double)
+#         scan = scan.reshape((len(scan) // 3, 3))        
         header = std_msgs.msg.Header(
             stamp=rospy.Time.from_sec(timestamp), 
             frame_id='ldmrs')
@@ -130,6 +146,9 @@ class PosePlayer:
         self.tfb = TransformBroadcaster()
         
     def close(self):
+        pass
+    
+    def initializeRun (self):
         pass
     
     def _getEvents (self):
@@ -246,10 +265,10 @@ class Player:
                         evt['object'].firstValidId = evt['id']
                     validEvents.append(evt)
             
-            # Find first ID        
-            
             self.eventList = validEvents
-        
+
+        for player in self.players:
+            player.initializeRun()
         
         
 if __name__ == '__main__' :
@@ -266,9 +285,12 @@ if __name__ == '__main__' :
     player = Player (args.dir, rate=args.rate, start=args.start)
     poses = PosePlayer (player.dataset)
     images = ImagePlayer(player.dataset)
-#     lidar3d = LidarPlayer (player.dataset)
+    lidar3d = LidarPlayer (player.dataset)
     player.add_data_player(poses)
     player.add_data_player(images)
-#     player.add_data_player(lidar3d)
+    player.add_data_player(lidar3d)
+    
+    print ("[SPACE] to pause, [Ctrl+C] to break")
     player.run()
+    print ("Done")
 

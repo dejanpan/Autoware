@@ -8,8 +8,7 @@ import time
 
 class FileCollector:
     
-    def __init__ (self, _fileList, _ReadFunc, _firstId=0, queue_length=10):
-        self.firstId = _firstId
+    def __init__ (self, _fileList, _ReadFunc, queue_length=10):
         self.length = queue_length
         self.queue = deque(maxlen=self.length)
         self.ReadFunc = _ReadFunc
@@ -22,6 +21,7 @@ class FileCollector:
         
     def close (self):
         self.stop.set()
+        self.full.set()
         print ("Stopping...")
         time.sleep(0.1)
         self.process.join()
@@ -37,7 +37,7 @@ class FileCollector:
         return val
     
     def producer (self):
-        i = self.firstId
+        i = 0
         while True:
             if self.stop.is_set():
                 return

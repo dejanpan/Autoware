@@ -79,3 +79,7 @@ class Dataset:
             insTbl[:,1] += Dataset.OriginCorrectionEasting
             insTbl[:,2] += Dataset.OriginCorrectionNorthing
         return insTbl
+    
+#     def getExtrinsics (self, name):
+#         path = self.path + '/ex' + name + '.txt'
+#         return np.fromfile(path)

@@ -66,6 +66,8 @@ class ImagePlayer:
         image_ctr = self.collector.pick()
 #         image_ctr = cv2.imread(imageTarget['center'], cv2.IMREAD_ANYCOLOR)
 #         image_ctr = self.imagePostProcessing(image_ctr)
+        if (image_ctr is None):
+            return
         
         msg = self.cvbridge.cv2_to_imgmsg(image_ctr, 'bgr8')
         msg.header.stamp = rospy.Time.from_sec (timestamp)
@@ -84,6 +86,9 @@ class ImagePlayer:
     
     def readFileFunc (self, path):
         image = cv2.imread(path, cv2.IMREAD_ANYCOLOR)
+        if (image is None):
+            print ("Image is empty: {}".format(path))
+            return None
         return self.imagePostProcessing(image)
 
 

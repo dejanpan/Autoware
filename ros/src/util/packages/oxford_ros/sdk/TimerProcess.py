@@ -28,10 +28,15 @@ class TimerProcess :
         self.currentEventTimerId = None
         self.eventNotification = mp.Event()
         self.currentTimestamp = self.startTimestamp
+        self.stopTime = _eventList[-1]
+        self.duration = self.stopTime - self.startTimestamp
         
         # Last
         self.proc = mp.Process(target=self._process)
         self.proc.start()
+        
+    def printProgress (self):
+        pass
         
     def pause (self):
         self._isPause.set()
@@ -62,6 +67,7 @@ class TimerProcess :
             
             if (not self._isPause.isSet()):
                 self.currentTimestamp += self.timeIncrement
+                self.printProgress()
                 
             if (self.currentTimestamp >= self.eventList[self.currentEventTimerId]) :
                 self.eventNotification.set()

@@ -1,4 +1,4 @@
-
+from __future__ import print_function
 import os
 import time
 import multiprocessing.dummy as mp
@@ -36,7 +36,8 @@ class TimerProcess :
         self.proc.start()
         
     def printProgress (self):
-        pass
+        cdura = self.currentTimestamp - self.startTimestamp
+        print ("{} / {}".format(cdura, self.duration), end="\r")
         
     def pause (self):
         self._isPause.set()

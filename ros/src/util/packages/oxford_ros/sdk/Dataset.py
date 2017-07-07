@@ -61,7 +61,7 @@ class Dataset:
         timestamps = self.getTimestamp("lms_{}".format(name), raw=True)
         filelist = []
         for ts in timestamps:
-            f = {'timestamp': float(ts)/1000000.0, 'path': self.path + '/lms_{}/' + ts + '.bin'}
+            f = {'timestamp': float(ts)/1000000.0, 'path': self.path + '/lms_front/' + ts + '.bin'}
             filelist.append (f)
         return filelist
             

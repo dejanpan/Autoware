@@ -316,11 +316,11 @@ if __name__ == '__main__' :
     poses = PosePlayer (player.dataset)
     images = ImagePlayer(player.dataset)
     lidar3d = Lidar3Player (player.dataset)
-#     lidarfront = Lidar2Player (player.dataset)
+    lidarfront = Lidar2Player (player.dataset)
     player.add_data_player(poses)
     player.add_data_player(images)
     player.add_data_player(lidar3d)
-#     player.add_data_player(lidarfront)
+    player.add_data_player(lidarfront)
     
     print ("[SPACE] to pause, [Ctrl+C] to break")
     player.run()

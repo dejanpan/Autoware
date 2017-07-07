@@ -9,7 +9,9 @@
 <node name="oxford_player" pkg="oxford_ros" type="player.py" args="--dir=$(arg dir) --rate=$(arg rate) --start=$(arg start)" output="screen" />
 
 <!-- TF setup; copied from Oxford Dataset SDK -->
-<node name="ins_tf" pkg="tf" type="static_transform_publisher" args="-1.7132 0.1181 1.1948 -0.006 -0.040 0.013 ins camera 10" />
-<node name="ldmrs_tf" pkg="tf" type="static_transform_publisher" args="1.5349 0.0090 1.3777 -0.0299 0.0767 0.0205 camera ldmrs 10" />
+<!--<node name="base_link_tf" pkg="tf" type="static_transform_publisher" args="0 0 0 2.35619449 0 0 base_link ins 10" />-->
+<node name="base_link_tf" pkg="tf" type="static_transform_publisher" args="0 0 0 1.571 0 0 base_link ins 10" />
+<node name="ins_tf" pkg="tf" type="static_transform_publisher" args="1.72 0.12 1.07 -0.006 -0.040 0.013 ins camera 10" />
+<node name="ldmrs_tf" pkg="tf" type="static_transform_publisher" args="1.98 0.13 -1.2 -0.0299 0.0767 0.0205 camera ldmrs 10" />
 
 </launch>

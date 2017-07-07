@@ -92,15 +92,16 @@ class ImagePlayer:
         return self.imagePostProcessing(image)
 
 
-class LidarPlayer:
+class Lidar3Player:
+    _lidarName = 'ldmrs'
+    
     def __init__ (self, dataset):
         self.firstValidId = -1
         self.lidarFileSet = dataset.getMainLidar()
-        self.publisher = rospy.Publisher ('/oxford/ldmrs', PointCloud2, queue_size=10)
-        pass
+        self.publisher = rospy.Publisher ('/oxford/'+Lidar3Player._lidarName, PointCloud2, queue_size=10)
     
     def close (self):
-        print ("Closing LIDAR set")
+        print ("Closing {} set".format(self._lidarName))
         self.collector.close()
     
     def initializeRun (self):
@@ -120,12 +121,9 @@ class LidarPlayer:
     
     def _passEvent (self, timestamp, eventId, publish=True):
         scan = self.collector.pick()
-#         lidarFile = self.lidarFileSet[eventId]
-#         scan = np.fromfile(lidarFile['path'], np.double)
-#         scan = scan.reshape((len(scan) // 3, 3))        
         header = std_msgs.msg.Header(
             stamp=rospy.Time.from_sec(timestamp), 
-            frame_id='ldmrs')
+            frame_id=Lidar3Player._lidarName)
         fields = [
             PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
             PointField(name='y', offset=8, datatype=PointField.FLOAT32, count=1),
@@ -141,6 +139,34 @@ class LidarPlayer:
         scan = np.fromfile(path, np.double)
         return scan.reshape ((len(scan) // 3,3)).astype(np.float32)
         
+
+class Lidar2Player (Lidar3Player):
+    _lidarName = 'lms_front'
+    
+    def __init__ (self, dataset):
+        self.firstValidId = -1
+        self.lidarFileSet = dataset.getLidar2D('front')
+        self.publisher = rospy.Publisher ('/oxford/'+self._lidarName, PointCloud2, queue_size=10)
+    
+    def _passEvent (self, timestamp, eventId, publish=True):
+        scan = self.collector.pick()
+#         scan = scan[:,0:2]
+        header = std_msgs.msg.Header(
+            stamp=rospy.Time.from_sec(timestamp), 
+            frame_id=self._lidarName)
+        fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='i', offset=16, datatype=PointField.FLOAT32, count=1)
+        ]
+        msg = pcl2.create_cloud(header, fields, scan)
+        if (publish):
+            self.publisher.publish(msg)
+        else:
+            return msg
+        
+        
+
 
 
 
@@ -164,7 +190,7 @@ class PosePlayer:
     def _passEvent (self, timestamp, eventId, publish=True):
         poseRow = self.poses[eventId]
         curPose = PosePlayer.createPoseFromRPY(
-            poseRow[1], poseRow[2], poseRow[3], poseRow[4], poseRow[5], poseRow[6])
+            poseRow[1], poseRow[2], poseRow[3], poseRow[4], -poseRow[5], -poseRow[6])
         curPose.header.stamp = rospy.Time.from_sec(timestamp)
         curPose.header.frame_id = 'world'
         if (publish):
@@ -178,7 +204,7 @@ class PosePlayer:
                  curPose.pose.orientation.z,
                  curPose.pose.orientation.w),
                 rospy.Time.from_sec(timestamp),
-                'ins',
+                'base_link',
                 'world'
             )
         else:
@@ -289,10 +315,12 @@ if __name__ == '__main__' :
     player = PlayerControl (args.dir, rate=args.rate, start=args.start)
     poses = PosePlayer (player.dataset)
     images = ImagePlayer(player.dataset)
-    lidar3d = LidarPlayer (player.dataset)
+    lidar3d = Lidar3Player (player.dataset)
+#     lidarfront = Lidar2Player (player.dataset)
     player.add_data_player(poses)
     player.add_data_player(images)
     player.add_data_player(lidar3d)
+#     player.add_data_player(lidarfront)
     
     print ("[SPACE] to pause, [Ctrl+C] to break")
     player.run()

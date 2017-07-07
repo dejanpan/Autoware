@@ -57,6 +57,16 @@ class Dataset:
             filelist.append (f)
         return filelist
     
+    def getLidar2D (self, name='front'):
+        timestamps = self.getTimestamp("lms_{}".format(name), raw=True)
+        filelist = []
+        for ts in timestamps:
+            f = {'timestamp': float(ts)/1000000.0, 'path': self.path + '/lms_{}/' + ts + '.bin'}
+            filelist.append (f)
+        return filelist
+            
+            
+    
     def getGps (self, useOriginCorrection=True):
         gpsTbl = np.loadtxt(self.path+'/gps/gps.csv',
             skiprows=1,

@@ -37,7 +37,7 @@ class TimerProcess :
         
     def printProgress (self):
         cdura = self.currentTimestamp - self.startTimestamp
-        print ("{} / {}".format(cdura, self.duration), end="\r")
+        print ("{:.3f} / {:.3f}       ".format(cdura, self.duration), end="\r")
         
     def pause (self):
         self._isPause.set()
@@ -54,6 +54,7 @@ class TimerProcess :
         i = 0
         self.currentTimestamp = self.startTimestamp
         self.currentEventTimerId = 0
+        proct1 = time.time()
         
         while (True):
             if (self._isStop.isSet()):
@@ -64,7 +65,11 @@ class TimerProcess :
             ck.clock = rospy.Time.from_sec(self.currentTimestamp)
             self.clockPub.publish(ck)
             
-            time.sleep(self.delay)
+            proct2 = time.time()
+            procdelay = proct2 - proct1
+            if (procdelay < self.delay):
+                time.sleep(self.delay - procdelay)
+            proct1 = time.time()
             
             if (not self._isPause.isSet()):
                 self.currentTimestamp += self.timeIncrement
